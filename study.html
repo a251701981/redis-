@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+    <head>
+	    <title>vue</title>
+		<script src="./vue.js" ></script>
+	</head>
+	<body>
+	    <div id="main" >
+		    <table style="border:1px solid black;" >
+			    <tr v-for="tr in map">
+				    <td v-for="td in tr" >{{td}}</td>
+				</tr>
+			</table>
+		</div>
+	</body>
+</html>
+<script>
+    var mapConfig = {width:50,heigth:50};
+	
+	var mapVm = new Vue({
+	    el:'#main',
+	    data:{
+		    map:[],
+		},
+		methods:{
+		    initMap:function()
+			{
+			    for(var i = mapConfig.heigth;i>0;i--)
+				{
+				    var tr = [];
+					for(var z = mapConfig.width;z>0;z--)
+					{
+					    tr.push(0);
+					    
+					}
+					this.map.push(tr);
+				}
+			},
+			addObj:function(obj)
+			{
+			    this.map[obj.x][obj.y] = obj;
+			}
+		},
+		created:function(){
+		    this.initMap();
+		},
+	});
+</script>
