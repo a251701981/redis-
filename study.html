@@ -3,46 +3,62 @@
     <head>
 	    <title>vue</title>
 		<script src="./vue.js" ></script>
+		<script src="./fairy.js" ></script>
+		<style>
+		    div.layer{
+			        position:absolute;left:50px;top:10px;border:1px solid black;
+					overflow:hidden;
+					width:600px;
+					height:600px;
+				}
+		</style>
 	</head>
 	<body>
 	    <div id="main" >
-		    <table style="border:1px solid black;" >
-			    <tr v-for="tr in map">
-				    <td v-for="td in tr" >{{td}}</td>
-				</tr>
-			</table>
+		    <div :style="root.style" class="layer" >
+			    <div v-for="ro in root.fairyList" :style="ro" ></div>
+			</div>
+			<div :style="action.style" class="layer" >
+			    <div v-for="ac in action.fairyList" :style="ac" ></div>
+		    </div>
 		</div>
 	</body>
 </html>
 <script>
-    var mapConfig = {width:50,heigth:50};
 	
 	var mapVm = new Vue({
 	    el:'#main',
 	    data:{
-		    map:[],
+		    root:{
+			    style:{
+					zIndex:1,border:'1px solid black',
+				},
+				fairyList:{
+				},
+			},
+			action:{
+			    style:{
+				    zIndex:2
+				},
+				fairyList:{
+				},
+			},
 		},
 		methods:{
 		    initMap:function()
 			{
-			    for(var i = mapConfig.heigth;i>0;i--)
-				{
-				    var tr = [];
-					for(var z = mapConfig.width;z>0;z--)
-					{
-					    tr.push(0);
-					    
-					}
-					this.map.push(tr);
-				}
+			    
 			},
-			addObj:function(obj)
+			addFairy:function(fairy,layerName)
 			{
-			    this.map[obj.x][obj.y] = obj;
+			    var x = fairy.getter('left');
+			    var y = fairy.getter('top');
+				this[layerName].fairyList[x+'_'+y] = fairy;
 			}
 		},
 		created:function(){
-		    this.initMap();
+		    var obj = new BaseFairy(60,60,0,0,{url:'./logo.png',left:0,top:0});
+			this.addFairy(obj,'root');
 		},
 	});
 </script>
