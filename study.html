@@ -53,12 +53,19 @@
 			{
 			    var x = fairy.getter('left');
 			    var y = fairy.getter('top');
+				fairy.objPool = this[layerName].fairyList;
 				this[layerName].fairyList[x+'_'+y] = fairy;
 			}
+			
 		},
 		created:function(){
-		    var obj = new BaseFairy(60,60,0,0,{url:'./logo.png',left:0,top:0});
+		    var func = function()
+			{
+				this.xMove(100);
+			}
+		    var obj = new ActionFairy(60,60,0,0,{url:'./logo.png',left:0,top:0},func);
 			this.addFairy(obj,'root');
+			obj.addFrame(func);
 		},
 	});
 </script>
