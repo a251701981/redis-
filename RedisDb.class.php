@@ -227,12 +227,12 @@ abstract class RedisDb
                             $midkey2
                     ]);
         }
-        
         /* 根据logic条件选择使用交集还是并集合成end集合 */
         $endkey1 = $this->tempZsetKey_mid;
         $endkey2 = $this->tempZsetKey_end;
-        
         if ($logic == 'and') {
+            if (!$this->redis->exists($this->tempZsetKey_end))
+                $endkey2 = $endkey1;
             $this->redis->zinterstore($this->tempZsetKey_end, 
                     [
                             $endkey1,
