@@ -1,4 +1,6 @@
 <?php
+namespace Common\Api;
+
 abstract class RedisDb
 {
 
@@ -91,10 +93,8 @@ abstract class RedisDb
     {
         $this->checkField($data);
         
-        
         $pk = $this->insertRow($data);
         $this->createIndex($data, $pk);
-        
     }
     
     /*
@@ -178,8 +178,8 @@ abstract class RedisDb
         /* 如果是非索引字段 */
         if (empty($indexType))
             return;
-        
-        //num类型索引只需修改原集合
+            
+            // num类型索引只需修改原集合
         if ($indexType == 'num') {
             $this->updateIndex_num($field, $value, $pk);
             return;
@@ -220,8 +220,7 @@ abstract class RedisDb
         $values = explode(',', $values);
         foreach ($values as $k => $value) {
             $midkey1 = $this->makeUnk($field, $value);
-            if ($k <= 1)
-                $midkey2 = ($this->redis->exists($this->tempZsetKey_mid)) ? $this->tempZsetKey_mid : $midkey1;
+            $midkey2 = $this->tempZsetKey_mid;
             $this->redis->zunionstore($this->tempZsetKey_mid, 
                     [
                             $midkey1,
@@ -231,7 +230,7 @@ abstract class RedisDb
         
         /* 根据logic条件选择使用交集还是并集合成end集合 */
         $endkey1 = $this->tempZsetKey_mid;
-        $endkey2 = ($this->redis->exists($this->tempZsetKey_end)) ? $this->tempZsetKey_end : $endkey1;
+        $endkey2 = $this->tempZsetKey_end;
         
         if ($logic == 'and') {
             $this->redis->zinterstore($this->tempZsetKey_end, 
@@ -622,19 +621,46 @@ abstract class RedisDb
      * 从mysql初始化依赖数据
      * @param String $values 查询的主键值列表
      */
-    abstract function initData ($values)
+    protected function initData ($values)
+    {
+        $values = explode(',', $values);
+        /* 计算出需要从mysql获取的id列表 */
+        $needIds = [];
+        foreach ($values as $v) {
+            $pk = $this->makePk($v);
+            if ($res = $this->redis->zScore($this->pkIndexKey, $pk) === false)
+                $needIds[] = $v;
+        }
+        $map = array(
+                $this->pkField => array(
+                        'in',
+                        join(',', $needIds)
+                )
+        );
+        $res = M($this->table)->field($this->fields)
+            ->where($map)
+            ->select();
+        foreach ($res as $v) {
+            $this->insert($v);
+        }
+    }
     
     /*
      * 获取某主键id对应的行的某个字段值在符合条件结果集里面的排名
      * @param String $field 字段名
      * @param $id 值
      * @return Int 名次值
-     * */
-    public function getRankValue($field,$id)
+     */
+    public function getRankValue ($field, $id)
     {
         $pk = $this->makePk($id);
-        $this->order($field,'desc');
+        $this->order($field, 'desc');
         
-        return $this->redis->zrevrank($this->tempZsetKey_end,$pk) + 1;
+        return $this->redis->zrevrank($this->tempZsetKey_end, $pk) + 1;
+    }
+
+    public function getFields ()
+    {
+        return $this->fields;
     }
 }
