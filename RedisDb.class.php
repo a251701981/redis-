@@ -212,7 +212,6 @@ abstract class RedisDb
         if ($field == $this->pkField)
             $this->initData($values);
         
-        $this->isCreated = true;
         $indexType = $this->indexs[$field];
         if (empty($indexType) || $indexType != 'unk' && $indexType != 'pk')
             throw new \Exception('byField条件字段未设置unk索引');
@@ -227,12 +226,11 @@ abstract class RedisDb
                             $midkey2
                     ]);
         }
+        $this->initTempZset();//在初始化mid后，才能初始化end临时集合
         /* 根据logic条件选择使用交集还是并集合成end集合 */
         $endkey1 = $this->tempZsetKey_mid;
         $endkey2 = $this->tempZsetKey_end;
         if ($logic == 'and') {
-            if (!$this->redis->exists($this->tempZsetKey_end))
-                $endkey2 = $endkey1;
             $this->redis->zinterstore($this->tempZsetKey_end, 
                     [
                             $endkey1,
@@ -245,6 +243,8 @@ abstract class RedisDb
                             $endkey2
                     ]);
         }
+        /*标识为已经根据条件创建过一次临时集合了*/
+        $this->isCreated = true;
         $this->redis->del($this->tempZsetKey_mid);
         return $this;
     }
@@ -268,25 +268,29 @@ abstract class RedisDb
      */
     public function byScope ($field, $min, $max, $logic = 'and')
     {
-        $this->isCreated = true;
         $indexType = $this->indexs[$field];
         if (empty($indexType) || $indexType != 'num')
             throw new \Exception('byScope条件字段未设置num索引');
-            
-            /* 根据条件生成中间集合 */
+        
+        /*处理包括$min、$max本身问题*/
+        $min = (strpos($min,'(') === false)?('('.$min):trim($min,'(');
+        $max = (strpos($max,'(') === false)?('('.$max):trim($max,'(');
+        
+        /* 根据条件生成中间集合 */
         $scopekey = $this->makeNum($field);
         /* 复制一份到中间集合 */
-        $this->redis->zinterstore($this->tempZsetKey_mid, 
+        $this->redis->zunionstore($this->tempZsetKey_mid, 
                 [
                         $scopekey,
                         $scopekey
-                ], 0, 1);
+                ],[0,1]);
         /* 范围筛选,移除$min~$max以外的元素 */
         $this->redis->zRemRangeByScore($this->tempZsetKey_mid, '-inf', $min);
         $this->redis->zRemRangeByScore($this->tempZsetKey_mid, $max, '+inf');
         $endkey1 = $this->tempZsetKey_mid;
-        $endkey2 = ($this->redis->exists($this->tempZsetKey_end)) ? $this->tempZsetKey_end : $endkey1;
-        /* 操作临时集合 */
+        $endkey2 = $this->tempZsetKey_end;
+        /* 操作临时end集合 */
+        $this->initTempZset();//在初始化mid后，才能初始化end临时集合
         if ($logic == 'and') {
             $res = $this->redis->zinterstore($this->tempZsetKey_end, 
                     [
@@ -308,6 +312,8 @@ abstract class RedisDb
                             0
                     ]);
         }
+        /*标识为已经根据条件创建过一次临时集合了*/
+        $this->isCreated = true;
         $this->redis->del($this->tempZsetKey_mid);
         return $this;
     }
@@ -320,8 +326,6 @@ abstract class RedisDb
     public function order ($fields, $sort = 'asc')
     {
         $key1 = $this->tempZsetKey_end;
-        if (! $this->redis->exists($this->tempZsetKey_end))
-            $key1 = $this->pkIndexKey;
         $fields = explode(',', $fields);
         foreach ($fields as $field) {
             $indexType = $this->indexs[$field];
@@ -338,6 +342,8 @@ abstract class RedisDb
                             1
                     ]);
         }
+        /*标识为已经根据条件创建过一次临时集合了*/
+        $this->isCreated = true;
         $this->sort = $sort;
         return $this;
     }
@@ -388,7 +394,7 @@ abstract class RedisDb
         $key = $this->tempZsetKey_end;
         if (! $this->isCreated)
             $key = $this->pkIndexKey;
-        $rangeMethod = ($this->sort == 'asc') ? 'ZREVRANGE' : 'ZRANGE';
+        $rangeMethod = ($this->sort == 'desc') ? 'ZREVRANGE' : 'ZRANGE';
         $res = $this->redis->$rangeMethod($key, $this->start, $this->stop);
         $this->selectedPk = $res;
         $this->redis->del($this->tempZsetKey_end);
@@ -646,6 +652,19 @@ abstract class RedisDb
     }
     
     /*
+     * 初始化临时集合,如果是第一次设置条件则临时集合为全集
+     */
+    protected function initTempZset ()
+    {
+        if (! $this->isCreated)
+            $this->redis->zunionstore($this->tempZsetKey_end, 
+                    [
+                            $this->tempZsetKey_end,
+                            $this->tempZsetKey_mid
+                    ]);
+    }
+    
+    /*
      * 获取某主键id对应的行的某个字段值在符合条件结果集里面的排名
      * @param String $field 字段名
      * @param $id 值
@@ -662,5 +681,21 @@ abstract class RedisDb
     public function getFields ()
     {
         return $this->fields;
+    }
+    
+    /*
+     * 获取所有记录
+     * @return $this;
+     */
+    public function getAll ()
+    {
+        $this->redis->zunionstore($this->tempZsetKey_end, 
+                [
+                        $this->pkIndexKey,
+                        $this->tempZsetKey_end
+                ]);
+        /*标识为已经根据条件创建过一次临时集合了*/
+        $this->isCreated = true;
+        return $this;
     }
 }
