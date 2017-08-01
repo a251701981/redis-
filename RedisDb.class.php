@@ -226,7 +226,7 @@ abstract class RedisDb
                             $midkey2
                     ]);
         }
-        $this->initTempZset();//在初始化mid后，才能初始化end临时集合
+        $this->initTempZset(); // 在初始化mid后，才能初始化end临时集合
         /* 根据logic条件选择使用交集还是并集合成end集合 */
         $endkey1 = $this->tempZsetKey_mid;
         $endkey2 = $this->tempZsetKey_end;
@@ -243,8 +243,6 @@ abstract class RedisDb
                             $endkey2
                     ]);
         }
-        /*标识为已经根据条件创建过一次临时集合了*/
-        $this->isCreated = true;
         $this->redis->del($this->tempZsetKey_mid);
         return $this;
     }
@@ -271,10 +269,10 @@ abstract class RedisDb
         $indexType = $this->indexs[$field];
         if (empty($indexType) || $indexType != 'num')
             throw new \Exception('byScope条件字段未设置num索引');
-        
-        /*处理包括$min、$max本身问题*/
-        $min = (strpos($min,'(') === false)?('('.$min):trim($min,'(');
-        $max = (strpos($max,'(') === false)?('('.$max):trim($max,'(');
+            
+            /* 处理包括$min、$max本身问题 */
+        $min = (strpos($min, '(') === false) ? ('(' . $min) : trim($min, '(');
+        $max = (strpos($max, '(') === false) ? ('(' . $max) : trim($max, '(');
         
         /* 根据条件生成中间集合 */
         $scopekey = $this->makeNum($field);
@@ -283,14 +281,18 @@ abstract class RedisDb
                 [
                         $scopekey,
                         $scopekey
-                ],[0,1]);
+                ], 
+                [
+                        0,
+                        1
+                ]);
         /* 范围筛选,移除$min~$max以外的元素 */
         $this->redis->zRemRangeByScore($this->tempZsetKey_mid, '-inf', $min);
         $this->redis->zRemRangeByScore($this->tempZsetKey_mid, $max, '+inf');
         $endkey1 = $this->tempZsetKey_mid;
         $endkey2 = $this->tempZsetKey_end;
         /* 操作临时end集合 */
-        $this->initTempZset();//在初始化mid后，才能初始化end临时集合
+        $this->initTempZset(); // 在初始化mid后，才能初始化end临时集合
         if ($logic == 'and') {
             $res = $this->redis->zinterstore($this->tempZsetKey_end, 
                     [
@@ -312,8 +314,6 @@ abstract class RedisDb
                             0
                     ]);
         }
-        /*标识为已经根据条件创建过一次临时集合了*/
-        $this->isCreated = true;
         $this->redis->del($this->tempZsetKey_mid);
         return $this;
     }
@@ -342,7 +342,7 @@ abstract class RedisDb
                             1
                     ]);
         }
-        /*标识为已经根据条件创建过一次临时集合了*/
+        /* 标识为已经根据条件创建过一次临时集合了 */
         $this->isCreated = true;
         $this->sort = $sort;
         return $this;
@@ -383,6 +383,7 @@ abstract class RedisDb
         $key = $this->tempZsetKey_end;
         $count = $this->redis->zcount($key, '-inf', '+inf');
         $this->redis->del($this->tempZsetKey_end);
+        $this->isCreated = false;
         return $count;
     }
     
@@ -398,6 +399,7 @@ abstract class RedisDb
         $res = $this->redis->$rangeMethod($key, $this->start, $this->stop);
         $this->selectedPk = $res;
         $this->redis->del($this->tempZsetKey_end);
+        $this->isCreated = false;
     }
     
     /*
@@ -652,7 +654,8 @@ abstract class RedisDb
     }
     
     /*
-     * 初始化临时集合,如果是第一次设置条件则临时集合为全集
+     * 初始化临时集合,如果是第一次设置条件则end集合的元素为mid集合
+     * 设置mid、end集合的过期时间避免碎片数据
      */
     protected function initTempZset ()
     {
@@ -662,6 +665,10 @@ abstract class RedisDb
                             $this->tempZsetKey_end,
                             $this->tempZsetKey_mid
                     ]);
+        $this->redis->expireat($this->tempZsetKey_end, time() + 120);
+        $this->redis->expireat($this->tempZsetKey_mid, time() + 120);
+        /* 标识为已经根据条件创建过一次临时集合了 */
+        $this->isCreated = true;
     }
     
     /*
@@ -694,7 +701,7 @@ abstract class RedisDb
                         $this->pkIndexKey,
                         $this->tempZsetKey_end
                 ]);
-        /*标识为已经根据条件创建过一次临时集合了*/
+        /* 标识为已经根据条件创建过一次临时集合了 */
         $this->isCreated = true;
         return $this;
     }
