@@ -6,7 +6,7 @@ abstract class RedisDb
 
     protected $redis = null;
 
-    protected $tableTempla = 'hash_{table}_{pkfield}:{id}'; // 主hash表key模板aaa
+    protected $tableTempla = 'hash_{table}_{pkfield}:{id}'; // 主hash表key模板
 
     protected $unkTempla = 'zset_{table}_index_unk_{field}:{val}'; // 唯一索引key模板
 
